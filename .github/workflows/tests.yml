@@ -1,0 +1,31 @@
+name: Tests
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  all_tests:
+    name: Test ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    strategy:
+      matrix:
+        include:
+          - name: Linux
+            os: ubuntu-latest
+            mode: opt
+          - name: MacOS
+            os: macos-latest
+            mode: opt
+          # TODO: Enable windows support
+          # - os: windows-latest
+    steps:
+    - name: Checkout the source
+      uses: actions/checkout@v2
+    - name: Test with Bazel
+      run: |
+        bazel test --compilation_mode=${{ matrix.mode }} ...:all --test_output=errors
+

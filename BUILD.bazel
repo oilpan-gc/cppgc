@@ -1,0 +1,265 @@
+load("@bazel_skylib//rules:common_settings.bzl", "bool_flag")
+load("@bazel_skylib//lib:selects.bzl", "selects")
+
+config_setting(
+    name = "is_x86_64",
+    constraint_values = ["@platforms//cpu:x86_64"],
+)
+
+config_setting(
+    name = "is_arm64",
+    constraint_values = ["@platforms//cpu:arm64"],
+)
+
+config_setting(
+    name = "is_linux",
+    constraint_values = ["@platforms//os:linux"],
+)
+
+config_setting(
+    name = "is_macos",
+    constraint_values = ["@platforms//os:macos"],
+)
+
+selects.config_setting_group(
+    name = "is_posix",
+    match_any = [
+        ":is_linux",
+        ":is_macos",
+    ],
+)
+
+selects.config_setting_group(
+    name = "linux_x86_64",
+    match_all = [
+        ":is_linux",
+        ":is_x86_64",
+    ],
+)
+
+selects.config_setting_group(
+    name = "macos_x86_64",
+    match_all = [
+        ":is_macos",
+        ":is_x86_64",
+    ],
+)
+
+selects.config_setting_group(
+    name = "macos_arm64",
+    match_all = [
+        ":is_macos",
+        ":is_arm64",
+    ],
+)
+
+config_setting(
+    name = "is_debug",
+    values = {
+        "compilation_mode": "dbg",
+    },
+)
+
+config_setting(
+    name = "is_compiler_default",
+    flag_values = {
+        "@bazel_tools//tools/cpp:compiler": "compiler",
+    },
+)
+
+selects.config_setting_group(
+    name = "is_compiler_default_on_macos",
+    match_all = [
+        ":is_compiler_default",
+        ":is_macos",
+    ],
+)
+
+config_setting(
+    name = "is_compiler_clang",
+    flag_values = {
+        "@bazel_tools//tools/cpp:compiler": "clang",
+    },
+)
+
+selects.config_setting_group(
+    name = "is_clang",
+    match_any = [
+        ":is_compiler_default_on_macos",
+        ":is_compiler_clang",
+    ],
+)
+
+selects.config_setting_group(
+    name = "is_compiler_default_on_linux",
+    match_all = [
+        ":is_compiler_default",
+        ":is_linux",
+    ],
+)
+
+config_setting(
+    name = "is_compiler_gcc",
+    flag_values = {
+        "@bazel_tools//tools/cpp:compiler": "gcc",
+    },
+)
+
+selects.config_setting_group(
+    name = "is_gcc",
+    match_any = [
+        ":is_compiler_default_on_linux",
+        ":is_compiler_gcc",
+    ],
+)
+
+# TODO: Support all the platforms v8 does.
+PLATFORM_SRCS = select({
+  ":is_posix": [
+    "src/base/platform/platform-posix.cc",
+    "src/base/platform/platform-posix.h",
+    "src/base/platform/platform-posix-time.cc",
+    "src/base/platform/platform-posix-time.h",
+    "src/base/debug/stack_trace_posix.cc",
+  ],
+}) + select({
+  ":is_linux": [
+    "src/base/platform/platform-linux.h",
+    "src/base/platform/platform-linux.cc",
+  ],
+  ":is_macos": [
+    "src/base/platform/platform-darwin.cc",
+    "src/base/platform/platform-macos.cc",
+  ],
+}) + select({
+  ":is_x86_64": [
+    "src/heap/base/asm/x64/push_registers_asm.cc",
+  ],
+  ":is_arm64": [
+    "src/heap/base/asm/arm64/push_registers_asm.cc",
+  ],
+})
+
+SHARED_DEFINES = [
+    "CPPGC_IS_STANDALONE",
+    # TODO(crbug.com/1325007): Enable -DCPPGC_POINTER_COMPRESSION when ready (requires caged heap)
+    # TODO: Support CPPGC_SUPPORTS_OBJECT_NAMES
+]
+
+PLATFORM_DEFINES = select({
+  ":is_x86_64": [
+    "CPPGC_CAGED_HEAP",
+    "CPPGC_YOUNG_GENERATION",
+  ],
+  ":is_arm64": [
+    "CPPGC_CAGED_HEAP",
+    "CPPGC_YOUNG_GENERATION",
+  ],
+})
+
+PLATFORM_LINKOPTS = select({
+  ":is_linux": [
+    "-Wl,--no-as-needed -ldl -pthread",
+  ],
+  ":is_macos": [
+    "-lpthread",
+  ],
+})
+
+PLATFORM_COPTS = select({
+  ":is_posix": [
+    "-fPIC",
+    "-fno-strict-aliasing",
+    "-Werror",
+    "-Wextra",
+    "-Wno-unknown-warning-option",
+    "-Wno-bitwise-instead-of-logical",
+    "-Wno-builtin-assume-aligned-alignment",
+    "-Wno-unused-parameter",
+    "-Wno-implicit-int-float-conversion",
+    "-Wno-deprecated-copy",
+    "-Wno-non-virtual-dtor",
+  ],
+}) + select({
+  ":is_clang": [
+    "-Wno-invalid-offsetof",
+    "-std=c++17",
+  ],
+  ":is_gcc": [
+    "-Wno-extra",
+    "-Wno-array-bounds",
+    "-Wno-class-memaccess",
+    "-Wno-comments",
+    "-Wno-deprecated-declarations",
+    "-Wno-implicit-fallthrough",
+    "-Wno-int-in-bool-context",
+    "-Wno-maybe-uninitialized",
+    "-Wno-mismatched-new-delete",
+    "-Wno-redundant-move",
+    "-Wno-return-type",
+    "-Wno-stringop-overflow",
+    # Use GNU dialect, because GCC doesn't allow using
+    # ##__VA_ARGS__ when in standards-conforming mode.
+    "-std=gnu++17",
+  ],
+})
+
+DEBUG_COPTS = select({
+  ":is_debug": [
+    "-DCPPGC_ENABLE_VERIFY_HEAP",
+    "-DV8_ENABLE_CHECKS",
+  ],
+  "//conditions:default": []
+})
+
+cc_library(
+  name = "cppgc",
+  hdrs = glob(["include/**/*.h"]),
+  strip_include_prefix = "include",
+  srcs = glob(
+    [
+      "src/**/*.h",
+      "src/**/*.cc",
+    ],
+    exclude = [
+      "src/base/win32-headers.h",
+      "src/base/platform/platform-*.cc",
+      "src/base/platform/platform-*.h",
+      "src/libplatform/tracing/recorder-*.cc",
+      "src/libplatform/tracing/recorder.h",
+      "src/libplatform/tracing/trace-event-listener.h",
+      "src/libplatform/tracing/trace-event-listener.cc",
+      "src/base/debug/stack_trace_*.cc",
+      "src/base/ubsan.cc",
+      "src/heap/base/asm/**/*.cc",
+    ]
+  ) + PLATFORM_SRCS,
+  copts = DEBUG_COPTS + PLATFORM_COPTS,
+  defines = SHARED_DEFINES + PLATFORM_DEFINES,
+  linkopts = PLATFORM_LINKOPTS,
+  deps = [
+    "@com_google_googletest//:gtest_prod",
+  ],
+  visibility = ["//visibility:public"],
+)
+
+cc_binary(
+  name = "cppgc_sample",
+  srcs = ["samples/cppgc/hello-world.cc"],
+  deps = [":cppgc"]
+)
+
+cc_test(
+  name = "cppgc_tests",
+  srcs = glob([
+    "test/unittests/heap/cppgc/*.h",
+    "test/unittests/heap/cppgc/*.cc",
+  ]),
+  copts = DEBUG_COPTS + PLATFORM_COPTS,
+  linkopts = PLATFORM_LINKOPTS,
+  deps = [
+    ":cppgc",
+    "@com_google_googletest//:gtest",
+  ],
+)
+
