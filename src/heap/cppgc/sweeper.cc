@@ -428,8 +428,7 @@ class SweepFinalizer final {
       SetMemoryInaccessible(header, size);
     };
 #if defined(CPPGC_CAGED_HEAP)
-    const uint64_t cage_base =
-        reinterpret_cast<uint64_t>(page->heap().caged_heap().base());
+    const uint64_t cage_base = CagedHeapBase::GetBase();
     HeapObjectHeader* next_unfinalized = nullptr;
 
     for (auto* unfinalized_header = page_state->unfinalized_objects_head;
@@ -808,7 +807,7 @@ class Sweeper::SweeperImpl final {
                                              StatsCollector::kIncrementalSweep);
     StatsCollector::EnabledScope inner_scope(
         stats_collector_, StatsCollector::kSweepOnAllocation);
-    MutatorThreadSweepingScope sweeping_in_progresss(*this);
+    MutatorThreadSweepingScope sweeping_in_progress(*this);
 
     {
       // First, process unfinalized pages as finalizing a page is faster than
@@ -925,7 +924,7 @@ class Sweeper::SweeperImpl final {
                                    StatsCollector::ScopeId internal_scope_id) {
     if (!is_in_progress_) return true;
 
-    MutatorThreadSweepingScope sweeping_in_progresss(*this);
+    MutatorThreadSweepingScope sweeping_in_progress(*this);
 
     bool sweep_complete;
     {

@@ -13,14 +13,6 @@
 namespace cppgc {
 namespace internal {
 
-CagedHeapLocalData::CagedHeapLocalData(HeapBase& heap_base,
-                                       PageAllocator& allocator)
-    : heap_base(heap_base) {
-#if defined(CPPGC_YOUNG_GENERATION)
-  age_table.Reset(&allocator);
-#endif  // defined(CPPGC_YOUNG_GENERATION)
-}
-
 #if defined(CPPGC_YOUNG_GENERATION)
 
 static_assert(
@@ -55,17 +47,18 @@ void AgeTable::SetAgeForRange(uintptr_t offset_begin, uintptr_t offset_end,
   set_age_for_outer_card(offset_end);
 }
 
-void AgeTable::Reset(PageAllocator* allocator) {
-  // TODO(chromium:1029379): Consider MADV_DONTNEED instead of MADV_FREE on
-  // POSIX platforms.
-  std::fill(table_.begin(), table_.end(), Age::kOld);
-  const uintptr_t begin = RoundUp(reinterpret_cast<uintptr_t>(table_.data()),
-                                  allocator->CommitPageSize());
-  const uintptr_t end =
-      RoundDown(reinterpret_cast<uintptr_t>(table_.data() + table_.size()),
-                allocator->CommitPageSize());
+AgeTable::Age AgeTable::GetAgeForRange(uintptr_t offset_begin,
+                                       uintptr_t offset_end) const {
+  Age result = GetAge(offset_begin);
+  for (auto offset = offset_begin + kCardSizeInBytes; offset < offset_end;
+       offset += kCardSizeInBytes) {
+    if (result != GetAge(offset)) result = Age::kMixed;
+  }
+  return result;
+}
 
-  allocator->DiscardSystemPages(reinterpret_cast<void*>(begin), end - begin);
+void AgeTable::ResetForTesting() {
+  std::fill(table_.begin(), table_.end(), Age::kOld);
 }
 
 #endif  // defined(CPPGC_YOUNG_GENERATION)
