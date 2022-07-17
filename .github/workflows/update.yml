@@ -1,0 +1,36 @@
+name: Update CPPGC
+
+on:
+  schedule:
+    - cron:  '0 7 1 * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout the source
+      uses: actions/checkout@v2
+    - name: Download Copybara
+      shell: bash
+      run: curl -SLO https://github.com/oilpan-gc/export-automation/releases/download/copybara/copybara_deploy.jar
+    - name: Create PR
+      shell: bash
+      env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        gh auth setup-git
+        git config --global user.name 'github-actions[bot]'
+        git config --global user.email '41898282+github-actions[bot]@users.noreply.github.com'
+        echo "https://x-access-token:$(gh config get -h github.com oauth_token)@api.github.com" > ~/.git-credentials
+        git_temp_dir=/tmp/copybara
+        mkdir -p $git_temp_dir
+        java -jar ./copybara_deploy.jar \
+          "$PWD/.github/workflows/copy.bara.sky" \
+          --git-origin-checkout-hook "$PWD/.github/workflows/download_extra_srcs.sh" \
+          --git-destination-path $git_temp_dir

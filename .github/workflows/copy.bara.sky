@@ -1,0 +1,83 @@
+# Copyright 2020 the V8 project authors. All rights reserved.
+# Use of this source code is governed by a BSD-style license that can be
+# found in the LICENSE file.
+
+INTERESTING_PATHS = [
+    'AUTHORS',
+    'CODE_OF_CONDUCT.md',
+    'LICENSE',
+    'samples/cppgc/**',
+    'src/base/**',
+    'src/tracing/trace-event.h',
+    'src/libplatform/**',
+    'src/heap/base/**',
+    'src/heap/cppgc/**',
+    'include/cppgc/**',
+    'include/libplatform/**',
+    'include/v8config.h',
+    'include/v8-platform.h',
+    'testing/**',
+    'test/unittests/heap/cppgc/**',
+]
+
+GITHUB_ONLY_PATHS = [
+    '.gitignore',
+    'BUILD.bazel',
+    'WORKSPACE',
+    '.bazelrc',
+    'repositories.bzl',
+    '.github/**',
+]
+
+origin_url = 'https://chromium.googlesource.com/v8/v8.git'
+destination_url = 'https://github.com/oilpan-gc/cppgc.git'
+
+# This workflow syncs cppgc source inside V8's googlesource repo with GitHub.
+core.workflow(
+    name='default',
+    origin=git.origin(
+        url=origin_url,
+        ref='main',
+    ),
+    destination=git.github_pr_destination(
+        url=destination_url,
+        destination_ref='main',
+        update_description=True,
+        pr_branch = 'latest_v8_export'
+    ),
+    origin_files=glob(INTERESTING_PATHS,
+                      exclude=['samples/cppgc/cppgc-for-v8-embedders.cc']),
+    destination_files=glob(['**'], exclude=GITHUB_ONLY_PATHS),
+    mode='SQUASH',
+    authoring=authoring.pass_thru('V8 Team <v8-dev@googlegroups.com>'),
+    transformations=[
+        core.copy(before = "include/cppgc/README.md", after = "README.md"),
+        core.replace(
+            before = '#include "testing/gtest/include/gtest/gtest_prod.h"  // nogncheck',
+            after = '#include <gtest/gtest_prod.h>',
+            paths = glob(["src/**/*.cc", "src/**/*.h"]),
+        ),
+        core.replace(
+            before = '#include "testing/gtest/include/gtest/gtest.h"',
+            after = '#include <gtest/gtest.h>',
+            paths = glob(["test/**/*.cc", "test/**/*.h"]),
+        ),
+        core.replace(
+            before = '#include "testing/gmock/include/gmock/gmock.h"',
+            after = '#include <gmock/gmock.h>',
+            paths = glob(["test/**/*.cc", "test/**/*.h"]),
+        ),
+        core.replace(
+            before = '#include "testing/gmock/include/gmock/gmock-matchers.h"',
+            after = '#include <gmock/gmock-matchers.h>',
+            paths = glob(["test/**/*.cc", "test/**/*.h"]),
+        ),
+        core.replace(
+            before = '#include "base/trace_event/common/trace_event_common.h"',
+            after = '#include "src/base/chromium/trace_event_common.h"',
+            paths = glob(["src/**/*.cc", "src/**/*.h"]),
+        ),
+        metadata.squash_notes(prefix='Export of V8 changes from ' +
+                              origin_url + '\n\nList of included changes:\n\n')
+    ]
+)
