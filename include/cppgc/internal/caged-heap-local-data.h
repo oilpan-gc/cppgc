@@ -10,6 +10,7 @@
 #include <cstdint>
 
 #include "cppgc/internal/api-constants.h"
+#include "cppgc/internal/caged-heap.h"
 #include "cppgc/internal/logging.h"
 #include "cppgc/platform.h"
 #include "v8config.h"  // NOLINT(build/include_directory)
@@ -17,6 +18,8 @@
 #if __cpp_lib_bitopts
 #include <bit>
 #endif  // __cpp_lib_bitopts
+
+#if defined(CPPGC_CAGED_HEAP)
 
 namespace cppgc {
 namespace internal {
@@ -48,14 +51,17 @@ class V8_EXPORT AgeTable final {
     table_[card(cage_offset)] = age;
   }
 
-  void SetAgeForRange(uintptr_t cage_offset_begin, uintptr_t cage_offset_end,
-                      Age age, AdjacentCardsPolicy adjacent_cards_policy);
-
   V8_INLINE Age GetAge(uintptr_t cage_offset) const {
     return table_[card(cage_offset)];
   }
 
-  void Reset(PageAllocator* allocator);
+  void SetAgeForRange(uintptr_t cage_offset_begin, uintptr_t cage_offset_end,
+                      Age age, AdjacentCardsPolicy adjacent_cards_policy);
+
+  Age GetAgeForRange(uintptr_t cage_offset_begin,
+                     uintptr_t cage_offset_end) const;
+
+  void ResetForTesting();
 
  private:
   V8_INLINE size_t card(uintptr_t offset) const {
@@ -82,12 +88,13 @@ static_assert(sizeof(AgeTable) == 1 * api_constants::kMB,
 
 #endif  // CPPGC_YOUNG_GENERATION
 
+// TODO(v8:12231): Remove this class entirely so that it doesn't occupy space is
+// when CPPGC_YOUNG_GENERATION is off.
 struct CagedHeapLocalData final {
-  CagedHeapLocalData(HeapBase&, PageAllocator&);
+  V8_INLINE static CagedHeapLocalData& Get() {
+    return *reinterpret_cast<CagedHeapLocalData*>(CagedHeapBase::GetBase());
+  }
 
-  bool is_incremental_marking_in_progress = false;
-  bool is_young_generation_enabled = false;
-  HeapBase& heap_base;
 #if defined(CPPGC_YOUNG_GENERATION)
   AgeTable age_table;
 #endif
@@ -95,5 +102,7 @@ struct CagedHeapLocalData final {
 
 }  // namespace internal
 }  // namespace cppgc
+
+#endif  // defined(CPPGC_CAGED_HEAP)
 
 #endif  // INCLUDE_CPPGC_INTERNAL_CAGED_HEAP_LOCAL_DATA_H_

@@ -3,6 +3,7 @@
 // found in the LICENSE file.
 
 #include "include/cppgc/internal/caged-heap-local-data.h"
+#include "include/cppgc/internal/caged-heap.h"
 #include "test/unittests/heap/cppgc/tests.h"
 #include <gtest/gtest.h>
 
@@ -18,11 +19,10 @@ class AgeTableTest : public testing::TestWithHeap {
 
   AgeTableTest()
       : disallow_gc_(GetHeapHandle()),
-        age_table_(Heap::From(GetHeap())->caged_heap().local_data().age_table) {
-  }
+        age_table_(CagedHeapLocalData::Get().age_table) {}
 
   ~AgeTableTest() override {
-    age_table_.Reset(GetPlatform().GetPageAllocator());
+    age_table_.ResetForTesting();
     // Collect all allocated pages.
     for (auto* page : allocated_pages_) BasePage::Destroy(page);
   }
@@ -197,9 +197,8 @@ TEST_F(AgeTableTest, SetAgeForMultipleCardsConsiderAdjacentCards) {
 }
 
 TEST_F(AgeTableTest, MarkAllCardsAsYoung) {
-  void* heap_start = Heap::From(GetHeap())->caged_heap().base();
-  void* heap_end =
-      static_cast<uint8_t*>(heap_start) + kCagedHeapReservationSize - 1;
+  uint8_t* heap_start = reinterpret_cast<uint8_t*>(CagedHeapBase::GetBase());
+  void* heap_end = heap_start + kCagedHeapReservationSize - 1;
   AssertAgeForAddressRange(heap_start, heap_end, Age::kOld);
   SetAgeForAddressRange(heap_start, heap_end, Age::kYoung,
                         AdjacentCardsPolicy::kIgnore);
