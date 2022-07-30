@@ -357,6 +357,7 @@ path. Add it with -I<path> to the command line
 # define V8_HAS_BUILTIN_SADD_OVERFLOW (__has_builtin(__builtin_sadd_overflow))
 # define V8_HAS_BUILTIN_SSUB_OVERFLOW (__has_builtin(__builtin_ssub_overflow))
 # define V8_HAS_BUILTIN_UADD_OVERFLOW (__has_builtin(__builtin_uadd_overflow))
+# define V8_HAS_BUILTIN_UNREACHABLE (__has_builtin(__builtin_unreachable))
 
 // Clang has no __has_feature for computed gotos.
 // GCC doc: https://gcc.gnu.org/onlinedocs/gcc/Labels-as-Values.html
@@ -395,6 +396,7 @@ path. Add it with -I<path> to the command line
 # define V8_HAS_BUILTIN_EXPECT 1
 # define V8_HAS_BUILTIN_FRAME_ADDRESS 1
 # define V8_HAS_BUILTIN_POPCOUNT 1
+# define V8_HAS_BUILTIN_UNREACHABLE 1
 
 // GCC doc: https://gcc.gnu.org/onlinedocs/gcc/Labels-as-Values.html
 #define V8_HAS_COMPUTED_GOTO 1
@@ -431,6 +433,9 @@ path. Add it with -I<path> to the command line
 # define V8_ASSUME(condition) DCHECK(condition)
 #elif V8_HAS_BUILTIN_ASSUME
 # define V8_ASSUME(condition) __builtin_assume(condition)
+#elif V8_HAS_BUILTIN_UNREACHABLE
+# define V8_ASSUME(condition) \
+  do { if (!(condition)) __builtin_unreachable(); } while (false)
 #else
 # define V8_ASSUME(condition)
 #endif
@@ -479,6 +484,34 @@ path. Add it with -I<path> to the command line
 #else
 # define V8_DEPRECATE_SOON(message)
 #endif
+
+
+#if defined(V8_IMMINENT_DEPRECATION_WARNINGS) || \
+    defined(V8_DEPRECATION_WARNINGS)
+#if defined(V8_CC_MSVC)
+# define START_ALLOW_USE_DEPRECATED() \
+    __pragma(warning(push))           \
+    __pragma(warning(disable : 4996))
+# define END_ALLOW_USE_DEPRECATED() __pragma(warning(pop))
+#else  // !defined(V8_CC_MSVC)
+# define START_ALLOW_USE_DEPRECATED()                               \
+    _Pragma("GCC diagnostic push")                                  \
+    _Pragma("GCC diagnostic ignored \"-Wdeprecated-declarations\"")
+#define END_ALLOW_USE_DEPRECATED() _Pragma("GCC diagnostic pop")
+#endif  // !defined(V8_CC_MSVC)
+#else  // !(defined(V8_IMMINENT_DEPRECATION_WARNINGS) ||
+       // defined(V8_DEPRECATION_WARNINGS))
+#define START_ALLOW_USE_DEPRECATED()
+#define END_ALLOW_USE_DEPRECATED()
+#endif  // !(defined(V8_IMMINENT_DEPRECATION_WARNINGS) ||
+        // defined(V8_DEPRECATION_WARNINGS))
+#define ALLOW_COPY_AND_MOVE_WITH_DEPRECATED_FIELDS(ClassName) \
+  START_ALLOW_USE_DEPRECATED()                                \
+  ClassName(const ClassName&) = default;                      \
+  ClassName(ClassName&&) = default;                           \
+  ClassName& operator=(const ClassName&) = default;           \
+  ClassName& operator=(ClassName&&) = default;                \
+  END_ALLOW_USE_DEPRECATED()
 
 
 #if defined(__GNUC__) && !defined(__clang__) && (__GNUC__ < 6)
@@ -590,13 +623,6 @@ V8 shared library set USING_V8_SHARED.
 
 #endif  // V8_OS_WIN
 
-// From C++17 onwards, static constexpr member variables are defined to be
-// "inline", and adding a separate definition for them can trigger deprecation
-// warnings. For C++14 and below, however, these definitions are required.
-#if __cplusplus < 201703L && (!defined(_MSVC_LANG) || _MSVC_LANG < 201703L)
-#define V8_STATIC_CONSTEXPR_VARIABLES_NEED_DEFINITIONS
-#endif
-
 // clang-format on
 
 // Processor architecture detection.  For more info on what's defined, see:
@@ -648,6 +674,9 @@ V8 shared library set USING_V8_SHARED.
 #if __riscv_xlen == 64
 #define V8_HOST_ARCH_RISCV64 1
 #define V8_HOST_ARCH_64_BIT 1
+#elif __riscv_xlen == 32
+#define V8_HOST_ARCH_RISCV32 1
+#define V8_HOST_ARCH_32_BIT 1
 #else
 #error "Cannot detect Riscv's bitwidth"
 #endif
@@ -663,7 +692,8 @@ V8 shared library set USING_V8_SHARED.
 #if !V8_TARGET_ARCH_X64 && !V8_TARGET_ARCH_IA32 && !V8_TARGET_ARCH_ARM &&      \
     !V8_TARGET_ARCH_ARM64 && !V8_TARGET_ARCH_MIPS && !V8_TARGET_ARCH_MIPS64 && \
     !V8_TARGET_ARCH_PPC && !V8_TARGET_ARCH_PPC64 && !V8_TARGET_ARCH_S390 &&    \
-    !V8_TARGET_ARCH_RISCV64 && !V8_TARGET_ARCH_LOONG64
+    !V8_TARGET_ARCH_RISCV64 && !V8_TARGET_ARCH_LOONG64 &&                      \
+    !V8_TARGET_ARCH_RISCV32
 #if defined(_M_X64) || defined(__x86_64__)
 #define V8_TARGET_ARCH_X64 1
 #elif defined(_M_IX86) || defined(__i386__)
@@ -688,6 +718,8 @@ V8 shared library set USING_V8_SHARED.
 #elif defined(__riscv) || defined(__riscv__)
 #if __riscv_xlen == 64
 #define V8_TARGET_ARCH_RISCV64 1
+#elif __riscv_xlen == 32
+#define V8_TARGET_ARCH_RISCV32 1
 #endif
 #else
 #error Target architecture was not detected as supported by v8
@@ -727,6 +759,8 @@ V8 shared library set USING_V8_SHARED.
 #endif
 #elif V8_TARGET_ARCH_RISCV64
 #define V8_TARGET_ARCH_64_BIT 1
+#elif V8_TARGET_ARCH_RISCV32
+#define V8_TARGET_ARCH_32_BIT 1
 #else
 #error Unknown target architecture pointer size
 #endif
@@ -757,6 +791,9 @@ V8 shared library set USING_V8_SHARED.
 #endif
 #if (V8_TARGET_ARCH_RISCV64 && !(V8_HOST_ARCH_X64 || V8_HOST_ARCH_RISCV64))
 #error Target architecture riscv64 is only supported on riscv64 and x64 host
+#endif
+#if (V8_TARGET_ARCH_RISCV32 && !(V8_HOST_ARCH_IA32 || V8_HOST_ARCH_RISCV32))
+#error Target architecture riscv32 is only supported on riscv32 and ia32 host
 #endif
 #if (V8_TARGET_ARCH_LOONG64 && !(V8_HOST_ARCH_X64 || V8_HOST_ARCH_LOONG64))
 #error Target architecture loong64 is only supported on loong64 and x64 host
@@ -797,7 +834,7 @@ V8 shared library set USING_V8_SHARED.
 #else
 #define V8_TARGET_BIG_ENDIAN 1
 #endif
-#elif V8_TARGET_ARCH_RISCV64
+#elif V8_TARGET_ARCH_RISCV32 || V8_TARGET_ARCH_RISCV64
 #define V8_TARGET_LITTLE_ENDIAN 1
 #elif defined(__BYTE_ORDER__)
 #if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
