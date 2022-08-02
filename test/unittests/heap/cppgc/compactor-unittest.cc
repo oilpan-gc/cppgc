@@ -31,7 +31,8 @@ struct CompactableGCed : public GarbageCollected<CompactableGCed> {
  public:
   ~CompactableGCed() { ++g_destructor_callcount; }
   void Trace(Visitor* visitor) const {
-    visitor->Trace(const_cast<const CompactableGCed*>(other));
+    VisitorBase::TraceRawForTesting(visitor,
+                                    const_cast<const CompactableGCed*>(other));
     visitor->RegisterMovableReference(
         const_cast<const CompactableGCed**>(&other));
   }
@@ -53,7 +54,8 @@ struct CompactableHolder
 
   void Trace(Visitor* visitor) const {
     for (int i = 0; i < kNumObjects; ++i) {
-      visitor->Trace(const_cast<const CompactableGCed*>(objects[i]));
+      VisitorBase::TraceRawForTesting(
+          visitor, const_cast<const CompactableGCed*>(objects[i]));
       visitor->RegisterMovableReference(
           const_cast<const CompactableGCed**>(&objects[i]));
     }
@@ -124,10 +126,12 @@ TEST_F(CompactorTest, NothingToCompact) {
   StartCompaction();
   heap()->stats_collector()->NotifyMarkingStarted(
       GarbageCollector::Config::CollectionType::kMajor,
+      GarbageCollector::Config::MarkingType::kAtomic,
       GarbageCollector::Config::IsForcedGC::kNotForced);
   heap()->stats_collector()->NotifyMarkingCompleted(0);
   FinishCompaction();
-  heap()->stats_collector()->NotifySweepingCompleted();
+  heap()->stats_collector()->NotifySweepingCompleted(
+      GarbageCollector::Config::SweepingType::kAtomic);
 }
 
 TEST_F(CompactorTest, NonEmptySpaceAllLive) {

@@ -924,10 +924,7 @@ class Platform {
   /**
    * Allows the embedder to manage memory page allocations.
    */
-  virtual PageAllocator* GetPageAllocator() {
-    // TODO(bbudge) Make this abstract after all embedders implement this.
-    return nullptr;
-  }
+  virtual PageAllocator* GetPageAllocator() = 0;
 
   /**
    * Allows the embedder to specify a custom allocator used for zones.
@@ -944,10 +941,7 @@ class Platform {
    * error.
    * Embedder overrides of this function must NOT call back into V8.
    */
-  virtual void OnCriticalMemoryPressure() {
-    // TODO(bbudge) Remove this when embedders override the following method.
-    // See crbug.com/634547.
-  }
+  virtual void OnCriticalMemoryPressure() {}
 
   /**
    * Enables the embedder to respond in cases where V8 can't allocate large
@@ -958,6 +952,7 @@ class Platform {
    *
    * Embedder overrides of this function must NOT call back into V8.
    */
+  V8_DEPRECATE_SOON("Use the method without informative parameter")
   virtual bool OnCriticalMemoryPressure(size_t length) { return false; }
 
   /**
@@ -1076,13 +1071,9 @@ class Platform {
    *    return v8::platform::NewDefaultJobHandle(
    *        this, priority, std::move(job_task), NumberOfWorkerThreads());
    * }
-   *
-   * TODO(etiennep): Make pure virtual once custom embedders implement it.
    */
   virtual std::unique_ptr<JobHandle> CreateJob(
-      TaskPriority priority, std::unique_ptr<JobTask> job_task) {
-    return nullptr;
-  }
+      TaskPriority priority, std::unique_ptr<JobTask> job_task) = 0;
 
   /**
    * Monotonically increasing time in seconds from an arbitrary fixed point in
