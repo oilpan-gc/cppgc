@@ -52,6 +52,9 @@
 
 #if V8_OS_DARWIN
 #include <mach/mach.h>
+#include <malloc/malloc.h>
+#else
+#include <malloc.h>
 #endif
 
 #if V8_OS_LINUX
@@ -507,6 +510,14 @@ bool OS::SetPermissions(void* address, size_t size, MemoryPermission access) {
 #endif
 
   return ret == 0;
+}
+
+// static
+void OS::SetDataReadOnly(void* address, size_t size) {
+  DCHECK_EQ(0, reinterpret_cast<uintptr_t>(address) % CommitPageSize());
+  DCHECK_EQ(0, size % CommitPageSize());
+
+  CHECK_EQ(0, mprotect(address, size, PROT_READ));
 }
 
 // static
