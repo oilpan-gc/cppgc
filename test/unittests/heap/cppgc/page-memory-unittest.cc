@@ -233,37 +233,19 @@ TEST(PageMemoryRegionTreeTest, AddLookupRemoveMultiple) {
 TEST(NormalPageMemoryPool, ConstructorEmpty) {
   v8::base::PageAllocator allocator;
   NormalPageMemoryPool pool;
-  constexpr size_t kBucket = 0;
-  EXPECT_EQ(NormalPageMemoryPool::Result(nullptr, nullptr), pool.Take(kBucket));
+  EXPECT_EQ(NormalPageMemoryPool::Result(nullptr, nullptr), pool.Take());
 }
 
-TEST(NormalPageMemoryPool, AddTakeSameBucket) {
+TEST(NormalPageMemoryPool, AddTake) {
   v8::base::PageAllocator allocator;
   FatalOutOfMemoryHandler oom_handler;
   auto pmr = std::make_unique<NormalPageMemoryRegion>(allocator, oom_handler);
   const PageMemory pm = pmr->GetPageMemory(0);
   NormalPageMemoryPool pool;
-  constexpr size_t kBucket = 0;
-  pool.Add(kBucket, pmr.get(), pm.writeable_region().base());
+  pool.Add(pmr.get(), pm.writeable_region().base());
   EXPECT_EQ(
       NormalPageMemoryPool::Result(pmr.get(), pm.writeable_region().base()),
-      pool.Take(kBucket));
-}
-
-TEST(NormalPageMemoryPool, AddTakeNotFoundDifferentBucket) {
-  v8::base::PageAllocator allocator;
-  FatalOutOfMemoryHandler oom_handler;
-  auto pmr = std::make_unique<NormalPageMemoryRegion>(allocator, oom_handler);
-  const PageMemory pm = pmr->GetPageMemory(0);
-  NormalPageMemoryPool pool;
-  constexpr size_t kFirstBucket = 0;
-  constexpr size_t kSecondBucket = 1;
-  pool.Add(kFirstBucket, pmr.get(), pm.writeable_region().base());
-  EXPECT_EQ(NormalPageMemoryPool::Result(nullptr, nullptr),
-            pool.Take(kSecondBucket));
-  EXPECT_EQ(
-      NormalPageMemoryPool::Result(pmr.get(), pm.writeable_region().base()),
-      pool.Take(kFirstBucket));
+      pool.Take());
 }
 
 TEST(PageBackendTest, AllocateNormalUsesPool) {
@@ -271,10 +253,10 @@ TEST(PageBackendTest, AllocateNormalUsesPool) {
   FatalOutOfMemoryHandler oom_handler;
   PageBackend backend(allocator, allocator, oom_handler);
   constexpr size_t kBucket = 0;
-  Address writeable_base1 = backend.AllocateNormalPageMemory(kBucket);
+  Address writeable_base1 = backend.TryAllocateNormalPageMemory();
   EXPECT_NE(nullptr, writeable_base1);
   backend.FreeNormalPageMemory(kBucket, writeable_base1);
-  Address writeable_base2 = backend.AllocateNormalPageMemory(kBucket);
+  Address writeable_base2 = backend.TryAllocateNormalPageMemory();
   EXPECT_NE(nullptr, writeable_base2);
   EXPECT_EQ(writeable_base1, writeable_base2);
 }
@@ -283,9 +265,9 @@ TEST(PageBackendTest, AllocateLarge) {
   v8::base::PageAllocator allocator;
   FatalOutOfMemoryHandler oom_handler;
   PageBackend backend(allocator, allocator, oom_handler);
-  Address writeable_base1 = backend.AllocateLargePageMemory(13731);
+  Address writeable_base1 = backend.TryAllocateLargePageMemory(13731);
   EXPECT_NE(nullptr, writeable_base1);
-  Address writeable_base2 = backend.AllocateLargePageMemory(9478);
+  Address writeable_base2 = backend.TryAllocateLargePageMemory(9478);
   EXPECT_NE(nullptr, writeable_base2);
   EXPECT_NE(writeable_base1, writeable_base2);
   backend.FreeLargePageMemory(writeable_base1);
@@ -296,8 +278,7 @@ TEST(PageBackendTest, LookupNormal) {
   v8::base::PageAllocator allocator;
   FatalOutOfMemoryHandler oom_handler;
   PageBackend backend(allocator, allocator, oom_handler);
-  constexpr size_t kBucket = 0;
-  Address writeable_base = backend.AllocateNormalPageMemory(kBucket);
+  Address writeable_base = backend.TryAllocateNormalPageMemory();
   if (kGuardPageSize) {
     EXPECT_EQ(nullptr, backend.Lookup(writeable_base - kGuardPageSize));
   }
@@ -318,7 +299,7 @@ TEST(PageBackendTest, LookupLarge) {
   FatalOutOfMemoryHandler oom_handler;
   PageBackend backend(allocator, allocator, oom_handler);
   constexpr size_t kSize = 7934;
-  Address writeable_base = backend.AllocateLargePageMemory(kSize);
+  Address writeable_base = backend.TryAllocateLargePageMemory(kSize);
   if (kGuardPageSize) {
     EXPECT_EQ(nullptr, backend.Lookup(writeable_base - kGuardPageSize));
   }
@@ -333,8 +314,7 @@ TEST(PageBackendDeathTest, DestructingBackendDestroysPageMemory) {
   Address base;
   {
     PageBackend backend(allocator, allocator, oom_handler);
-    constexpr size_t kBucket = 0;
-    base = backend.AllocateNormalPageMemory(kBucket);
+    base = backend.TryAllocateNormalPageMemory();
   }
   EXPECT_DEATH_IF_SUPPORTED(access(base[0]), "");
 }

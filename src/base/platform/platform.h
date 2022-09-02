@@ -30,6 +30,7 @@
 #include "src/base/base-export.h"
 #include "src/base/build_config.h"
 #include "src/base/compiler-specific.h"
+#include "src/base/macros.h"
 #include "src/base/optional.h"
 #include "src/base/platform/mutex.h"
 #include "src/base/platform/semaphore.h"
@@ -38,6 +39,10 @@
 #if V8_OS_QNX
 #include "src/base/qnx-math.h"
 #endif
+
+#if V8_CC_MSVC
+#include <intrin.h>
+#endif  // V8_CC_MSVC
 
 #if V8_OS_FUCHSIA
 #include <zircon/types.h>
@@ -334,6 +339,9 @@ class V8_BASE_EXPORT OS {
                                                void* new_address,
                                                MemoryPermission access);
 
+  // Make part of the process's data memory read-only.
+  static void SetDataReadOnly(void* address, size_t size);
+
  private:
   // These classes use the private memory management API below.
   friend class AddressSpaceReservation;
@@ -619,10 +627,21 @@ class V8_BASE_EXPORT Stack {
   static StackSlot GetStackStart();
 
   // Returns the current stack top. Works correctly with ASAN and SafeStack.
+  //
   // GetCurrentStackPosition() should not be inlined, because it works on stack
   // frames if it were inlined into a function with a huge stack frame it would
   // return an address significantly above the actual current stack position.
   static V8_NOINLINE StackSlot GetCurrentStackPosition();
+
+  // Same as `GetCurrentStackPosition()` with the difference that it is always
+  // inlined and thus always returns the current frame's stack top.
+  static V8_INLINE StackSlot GetCurrentFrameAddress() {
+#if V8_CC_MSVC
+    return _AddressOfReturnAddress();
+#else
+    return __builtin_frame_address(0);
+#endif
+  }
 
   // Returns the real stack frame if slot is part of a fake frame, and slot
   // otherwise.

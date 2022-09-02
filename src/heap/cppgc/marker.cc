@@ -338,7 +338,7 @@ class WeakCallbackJobTask final : public cppgc::JobTask {
     StatsCollector::EnabledConcurrentScope stats_scope(
         marker_->heap().stats_collector(),
         StatsCollector::kConcurrentWeakCallback);
-    MarkingWorklists::WeakCallbackWorklist::Local local(callback_worklist_);
+    MarkingWorklists::WeakCallbackWorklist::Local local(*callback_worklist_);
     MarkingWorklists::WeakCallbackItem item;
     while (local.Pop(&item)) {
       item.callback(broker_, item.parameter);
@@ -620,7 +620,7 @@ bool MarkerBase::ProcessWorklistsWithDeadline(
                 const HeapObjectHeader& header =
                     HeapObjectHeader::FromObject(item.base_object_payload);
                 DCHECK(!header.IsInConstruction<AccessMode::kNonAtomic>());
-                DCHECK(header.IsMarked<AccessMode::kNonAtomic>());
+                DCHECK(header.IsMarked<AccessMode::kAtomic>());
                 mutator_marking_state_.AccountMarkedBytes(header);
                 item.callback(&visitor(), item.base_object_payload);
               })) {
