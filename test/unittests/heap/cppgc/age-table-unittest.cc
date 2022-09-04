@@ -32,7 +32,7 @@ class AgeTableTest : public testing::TestWithHeap {
     auto* space = static_cast<NormalPageSpace*>(
         heap.Space(RawHeap::RegularSpaceType::kNormal1));
     auto* page =
-        NormalPage::Create(*Heap::From(GetHeap())->page_backend(), *space);
+        NormalPage::TryCreate(*Heap::From(GetHeap())->page_backend(), *space);
     allocated_pages_.push_back(page);
     return page;
   }
@@ -42,7 +42,7 @@ class AgeTableTest : public testing::TestWithHeap {
     RawHeap& heap = Heap::From(GetHeap())->raw_heap();
     auto* space = static_cast<LargePageSpace*>(
         heap.Space(RawHeap::RegularSpaceType::kLarge));
-    auto* page = LargePage::Create(*Heap::From(GetHeap())->page_backend(),
+    auto* page = LargePage::TryCreate(*Heap::From(GetHeap())->page_backend(),
                                    *space, kObjectSize);
     allocated_pages_.push_back(page);
     return page;
