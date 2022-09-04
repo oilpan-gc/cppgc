@@ -14,6 +14,12 @@ jobs:
   update:
     runs-on: ubuntu-latest
     steps:
+    - name: Get Token
+      id: get_workflow_token
+      uses: peter-murray/workflow-application-token-action@v1
+      with:
+        application_id: ${{ secrets.BOT_ID }}
+        application_private_key: ${{ secrets.BOT_PRIVATE_KEY }}
     - name: Checkout the source
       uses: actions/checkout@v2
     - name: Download Copybara
@@ -22,11 +28,11 @@ jobs:
     - name: Create PR
       shell: bash
       env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ steps.get_workflow_token.outputs.token }}
       run: |
         gh auth setup-git
-        git config --global user.name 'github-actions[bot]'
-        git config --global user.email '41898282+github-actions[bot]@users.noreply.github.com'
+        git config --global user.name 'oilpan-gc-automation[bot]'
+        git config --global user.email '112789766+oilpan-gc-automation[bot]@users.noreply.github.com'
         echo "https://x-access-token:$(gh config get -h github.com oauth_token)@api.github.com" > ~/.git-credentials
         git_temp_dir=/tmp/copybara
         mkdir -p $git_temp_dir
