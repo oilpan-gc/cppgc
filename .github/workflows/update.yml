@@ -33,7 +33,7 @@ jobs:
         gh auth setup-git
         git config --global user.name 'oilpan-gc-automation[bot]'
         git config --global user.email '112789766+oilpan-gc-automation[bot]@users.noreply.github.com'
-        echo "https://x-access-token:$(gh config get -h github.com oauth_token)@api.github.com" > ~/.git-credentials
+        echo "https://x-access-token:${GH_TOKEN}@api.github.com" > ~/.git-credentials
         git_temp_dir=/tmp/copybara
         mkdir -p $git_temp_dir
         java -jar ./copybara_deploy.jar \
