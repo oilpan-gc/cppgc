@@ -48,7 +48,7 @@ core.workflow(
     origin_files=glob(INTERESTING_PATHS,
                       exclude=['samples/cppgc/cppgc-for-v8-embedders.cc']),
     destination_files=glob(['**'], exclude=GITHUB_ONLY_PATHS),
-    mode='SQUASH',
+    mode='ITERATIVE',
     authoring=authoring.pass_thru('V8 Team <v8-dev@googlegroups.com>'),
     transformations=[
         core.copy(before = "include/cppgc/README.md", after = "README.md"),
