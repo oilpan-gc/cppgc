@@ -18,6 +18,7 @@
 #include "src/heap/cppgc/object-start-bitmap.h"
 #include "src/heap/cppgc/page-memory.h"
 #include "src/heap/cppgc/raw-heap.h"
+#include "src/heap/cppgc/remembered-set.h"
 #include "src/heap/cppgc/stats-collector.h"
 
 namespace cppgc {
@@ -47,13 +48,8 @@ BasePage* BasePage::FromInnerAddress(const HeapBase* heap, void* address) {
 // static
 const BasePage* BasePage::FromInnerAddress(const HeapBase* heap,
                                            const void* address) {
-#if defined(CPPGC_CAGED_HEAP)
-  return static_cast<BasePage*>(
-      &CagedHeapBase::LookupPageFromInnerPointer(const_cast<void*>(address)));
-#else   // !defined(CPPGC_CAGED_HEAP)
   return reinterpret_cast<const BasePage*>(
       heap->page_backend()->Lookup(static_cast<ConstAddress>(address)));
-#endif  // !defined(CPPGC_CAGED_HEAP)
 }
 
 // static
@@ -88,6 +84,13 @@ Address BasePage::PayloadEnd() {
 
 ConstAddress BasePage::PayloadEnd() const {
   return const_cast<BasePage*>(this)->PayloadEnd();
+}
+
+size_t BasePage::AllocatedSize() const {
+  return is_large() ? LargePage::PageHeaderSize() +
+                          LargePage::From(this)->PayloadSize()
+                    : NormalPage::From(this)->PayloadSize() +
+                          RoundUp(sizeof(NormalPage), kAllocationGranularity);
 }
 
 size_t BasePage::AllocatedBytesAtLastGC() const {
@@ -125,8 +128,32 @@ const HeapObjectHeader* BasePage::TryObjectHeaderFromInnerAddress(
   return header;
 }
 
+#if defined(CPPGC_YOUNG_GENERATION)
+void BasePage::AllocateSlotSet() {
+  DCHECK_NULL(slot_set_);
+  slot_set_ = decltype(slot_set_)(
+      static_cast<SlotSet*>(
+          SlotSet::Allocate(SlotSet::BucketsForSize(AllocatedSize()))),
+      SlotSetDeleter{AllocatedSize()});
+}
+
+void BasePage::SlotSetDeleter::operator()(SlotSet* slot_set) const {
+  DCHECK_NOT_NULL(slot_set);
+  SlotSet::Delete(slot_set, SlotSet::BucketsForSize(page_size_));
+}
+
+void BasePage::ResetSlotSet() { slot_set_.reset(); }
+#endif  // defined(CPPGC_YOUNG_GENERATION)
+
 BasePage::BasePage(HeapBase& heap, BaseSpace& space, PageType type)
-    : BasePageHandle(heap), space_(space), type_(type) {
+    : BasePageHandle(heap),
+      space_(space),
+      type_(type)
+#if defined(CPPGC_YOUNG_GENERATION)
+      ,
+      slot_set_(nullptr, SlotSetDeleter{})
+#endif  // defined(CPPGC_YOUNG_GENERATION)
+{
   DCHECK_EQ(0u, (reinterpret_cast<uintptr_t>(this) - kGuardPageSize) &
                     kPageOffsetMask);
   DCHECK_EQ(&heap.raw_heap(), space_.raw_heap());
@@ -247,9 +274,6 @@ LargePage* LargePage::TryCreate(PageBackend& page_backend,
 
   LargePage* page = new (memory) LargePage(*heap, space, size);
   page->SynchronizedStore();
-#if defined(CPPGC_CAGED_HEAP)
-  CagedHeap::Instance().NotifyLargePageCreated(page);
-#endif  // defined(CPPGC_CAGED_HEAP)
   page->heap().stats_collector()->NotifyAllocatedMemory(allocation_size);
   return page;
 }
@@ -271,9 +295,6 @@ void LargePage::Destroy(LargePage* page) {
 #endif  // DEBUG
   page->~LargePage();
   PageBackend* backend = heap.page_backend();
-#if defined(CPPGC_CAGED_HEAP)
-  CagedHeap::Instance().NotifyLargePageDestroyed(page);
-#endif  // defined(CPPGC_CAGED_HEAP)
   heap.stats_collector()->NotifyFreedMemory(AllocationSize(payload_size));
   backend->FreeLargePageMemory(reinterpret_cast<Address>(page));
 }

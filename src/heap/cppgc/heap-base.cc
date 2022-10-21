@@ -147,9 +147,8 @@ std::unique_ptr<PageBackend> HeapBase::InitializePageBackend(
     PageAllocator& allocator, FatalOutOfMemoryHandler& oom_handler) {
 #if defined(CPPGC_CAGED_HEAP)
   auto& caged_heap = CagedHeap::Instance();
-  return std::make_unique<PageBackend>(caged_heap.normal_page_allocator(),
-                                       caged_heap.large_page_allocator(),
-                                       oom_handler);
+  return std::make_unique<PageBackend>(
+      caged_heap.page_allocator(), caged_heap.page_allocator(), oom_handler);
 #else   // !CPPGC_CAGED_HEAP
   return std::make_unique<PageBackend>(allocator, allocator, oom_handler);
 #endif  // !CPPGC_CAGED_HEAP
@@ -251,18 +250,16 @@ void HeapBase::Terminate() {
 #endif  // defined(CPPGC_YOUNG_GENERATION)
 
     in_atomic_pause_ = true;
-    stats_collector()->NotifyMarkingStarted(
-        GarbageCollector::Config::CollectionType::kMajor,
-        GarbageCollector::Config::MarkingType::kAtomic,
-        GarbageCollector::Config::IsForcedGC::kForced);
+    stats_collector()->NotifyMarkingStarted(CollectionType::kMajor,
+                                            GCConfig::MarkingType::kAtomic,
+                                            GCConfig::IsForcedGC::kForced);
     object_allocator().ResetLinearAllocationBuffers();
     stats_collector()->NotifyMarkingCompleted(0);
     ExecutePreFinalizers();
     // TODO(chromium:1029379): Prefinalizers may black-allocate objects (under a
     // compile-time option). Run sweeping with forced finalization here.
-    sweeper().Start(
-        {Sweeper::SweepingConfig::SweepingType::kAtomic,
-         Sweeper::SweepingConfig::CompactableSpaceHandling::kSweep});
+    sweeper().Start({SweepingConfig::SweepingType::kAtomic,
+                     SweepingConfig::CompactableSpaceHandling::kSweep});
     in_atomic_pause_ = false;
 
     sweeper().NotifyDoneIfNeeded();
@@ -275,7 +272,7 @@ void HeapBase::Terminate() {
         }();
   } while (more_termination_gcs_needed);
 
-  object_allocator().Terminate();
+  object_allocator().ResetLinearAllocationBuffers();
   disallow_gc_scope_++;
 
   CHECK_EQ(0u, strong_persistent_region_.NodesInUse());
