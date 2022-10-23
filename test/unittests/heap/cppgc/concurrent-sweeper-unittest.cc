@@ -310,7 +310,7 @@ TEST_F(ConcurrentSweeperTest, DestroyLargePageOnMainThread) {
   EXPECT_FALSE(PageInBackend(page));
 }
 
-TEST_F(ConcurrentSweeperTest, IncrementalSweeping) {
+TEST_F(ConcurrentSweeperTest, DISABLED_IncrementalSweeping) {
   testing::TestPlatform::DisableBackgroundTasksScope disable_concurrent_sweeper(
       &GetPlatform());
 
