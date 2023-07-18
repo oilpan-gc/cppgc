@@ -52,8 +52,8 @@ std::vector<OS::SharedLibraryAddress> OS::GetSharedLibraryAddresses() {
     unsigned int size;
     char* code_ptr = getsectdatafromheader(header, SEG_TEXT, SECT_TEXT, &size);
 #else
-    uint64_t size;
-    char* code_ptr = getsectdatafromheader_64(
+    u_long size;
+    uint8_t* code_ptr = getsectiondata(
         reinterpret_cast<const mach_header_64*>(header), SEG_TEXT, SECT_TEXT,
         &size);
 #endif
