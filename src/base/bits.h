@@ -219,11 +219,40 @@ inline constexpr int WhichPowerOfTwo(T value) {
 // 0x80000000u. Uses computation based on leading zeros if we have compiler
 // support for that. Falls back to the implementation from "Hacker's Delight" by
 // Henry S. Warren, Jr., figure 3-3, page 48, where the function is called clp2.
-V8_BASE_EXPORT uint32_t RoundUpToPowerOfTwo32(uint32_t value);
+V8_BASE_EXPORT constexpr uint32_t RoundUpToPowerOfTwo32(uint32_t value) {
+  DCHECK_LE(value, uint32_t{1} << 31);
+  if (value) --value;
+// Use computation based on leading zeros if we have compiler support for that.
+#if V8_HAS_BUILTIN_CLZ || V8_CC_MSVC
+  return 1u << (32 - CountLeadingZeros(value));
+#else
+  value |= value >> 1;
+  value |= value >> 2;
+  value |= value >> 4;
+  value |= value >> 8;
+  value |= value >> 16;
+  return value + 1;
+#endif
+}
 // Same for 64 bit integers. |value| must be <= 2^63
-V8_BASE_EXPORT uint64_t RoundUpToPowerOfTwo64(uint64_t value);
+V8_BASE_EXPORT constexpr uint64_t RoundUpToPowerOfTwo64(uint64_t value) {
+  DCHECK_LE(value, uint64_t{1} << 63);
+  if (value) --value;
+// Use computation based on leading zeros if we have compiler support for that.
+#if V8_HAS_BUILTIN_CLZ
+  return uint64_t{1} << (64 - CountLeadingZeros(value));
+#else
+  value |= value >> 1;
+  value |= value >> 2;
+  value |= value >> 4;
+  value |= value >> 8;
+  value |= value >> 16;
+  value |= value >> 32;
+  return value + 1;
+#endif
+}
 // Same for size_t integers.
-inline size_t RoundUpToPowerOfTwo(size_t value) {
+inline constexpr size_t RoundUpToPowerOfTwo(size_t value) {
   if (sizeof(size_t) == sizeof(uint64_t)) {
     return RoundUpToPowerOfTwo64(value);
   } else {
@@ -310,9 +339,13 @@ inline bool SignedMulOverflow32(int32_t lhs, int32_t rhs, int32_t* val) {
 // |rhs| and stores the result into the variable pointed to by |val| and
 // returns true if the signed summation resulted in an overflow.
 inline bool SignedAddOverflow64(int64_t lhs, int64_t rhs, int64_t* val) {
+#if V8_HAS_BUILTIN_ADD_OVERFLOW
+  return __builtin_add_overflow(lhs, rhs, val);
+#else
   uint64_t res = static_cast<uint64_t>(lhs) + static_cast<uint64_t>(rhs);
   *val = base::bit_cast<int64_t>(res);
   return ((res ^ lhs) & (res ^ rhs) & (1ULL << 63)) != 0;
+#endif
 }
 
 
@@ -320,9 +353,34 @@ inline bool SignedAddOverflow64(int64_t lhs, int64_t rhs, int64_t* val) {
 // |rhs| and stores the result into the variable pointed to by |val| and
 // returns true if the signed subtraction resulted in an overflow.
 inline bool SignedSubOverflow64(int64_t lhs, int64_t rhs, int64_t* val) {
+#if V8_HAS_BUILTIN_SUB_OVERFLOW
+  return __builtin_sub_overflow(lhs, rhs, val);
+#else
   uint64_t res = static_cast<uint64_t>(lhs) - static_cast<uint64_t>(rhs);
   *val = base::bit_cast<int64_t>(res);
   return ((res ^ lhs) & (res ^ ~rhs) & (1ULL << 63)) != 0;
+#endif
+}
+
+// SignedMulOverflow64(lhs,rhs,val) performs a signed multiplication of |lhs|
+// and |rhs| and stores the result into the variable pointed to by |val| and
+// returns true if the signed multiplication resulted in an overflow.
+inline bool SignedMulOverflow64(int64_t lhs, int64_t rhs, int64_t* val) {
+#if V8_HAS_BUILTIN_MUL_OVERFLOW
+  return __builtin_mul_overflow(lhs, rhs, val);
+#else
+  int64_t res = base::bit_cast<int64_t>(static_cast<uint64_t>(lhs) *
+                                        static_cast<uint64_t>(rhs));
+  *val = res;
+
+  // Check for INT64_MIN / -1 as it's undefined behaviour and could cause
+  // hardware exceptions.
+  if ((res == INT64_MIN && lhs == -1)) {
+    return true;
+  }
+
+  return lhs != 0 && (res / lhs) != rhs;
+#endif
 }
 
 // SignedMulHigh32(lhs, rhs) multiplies two signed 32-bit values |lhs| and

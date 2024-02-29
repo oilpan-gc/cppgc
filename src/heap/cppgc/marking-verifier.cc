@@ -39,14 +39,13 @@ MarkingVerifierBase::MarkingVerifierBase(
     HeapBase& heap, CollectionType collection_type,
     VerificationState& verification_state,
     std::unique_ptr<cppgc::Visitor> visitor)
-    : ConservativeTracingVisitor(heap, *heap.page_backend(), *visitor.get()),
+    : ConservativeTracingVisitor(heap, *heap.page_backend(), *visitor),
       verification_state_(verification_state),
       visitor_(std::move(visitor)),
       collection_type_(collection_type) {}
 
 void MarkingVerifierBase::Run(
-    StackState stack_state, uintptr_t stack_end,
-    v8::base::Optional<size_t> expected_marked_bytes) {
+    StackState stack_state, v8::base::Optional<size_t> expected_marked_bytes) {
   Traverse(heap_.raw_heap());
 // Avoid verifying the stack when running with TSAN as the TSAN runtime changes
 // stack contents when e.g. working with locks. Specifically, the marker uses
@@ -63,7 +62,7 @@ void MarkingVerifierBase::Run(
 #if !defined(THREAD_SANITIZER) && !defined(CPPGC_POINTER_COMPRESSION)
   if (stack_state == StackState::kMayContainHeapPointers) {
     in_construction_objects_ = &in_construction_objects_stack_;
-    heap_.stack()->IteratePointersUnsafe(this, stack_end);
+    heap_.stack()->IteratePointersUntilMarker(this);
     // The objects found through the unsafe iteration are only a subset of the
     // regular iteration as they miss objects held alive only from callee-saved
     // registers that are never pushed on the stack and SafeStack.

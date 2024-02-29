@@ -23,9 +23,9 @@
 #include <malloc.h>
 #endif  // !V8_OS_DARWIN
 
-#if (V8_OS_POSIX && !V8_OS_AIX) || V8_OS_WIN
+#if (V8_OS_POSIX && !V8_OS_AIX && !V8_OS_SOLARIS) || V8_OS_WIN
 #define V8_HAS_MALLOC_USABLE_SIZE 1
-#endif  // (V8_OS_POSIX && !V8_OS_AIX) || V8_OS_WIN
+#endif  // (V8_OS_POSIX && !V8_OS_AIX && !V8_OS_SOLARIS) || V8_OS_WIN
 
 namespace v8::base {
 
@@ -83,8 +83,6 @@ inline void* AlignedAlloc(size_t size, size_t alignment) {
   // posix_memalign is not exposed in some Android versions, so we fall back to
   // memalign. See http://code.google.com/p/android/issues/detail?id=35391.
   return memalign(alignment, size);
-#elif V8_OS_STARBOARD
-  return SbMemoryAllocateAligned(alignment, size);
 #else   // POSIX
   void* ptr;
   if (posix_memalign(&ptr, alignment, size)) ptr = nullptr;
@@ -95,8 +93,6 @@ inline void* AlignedAlloc(size_t size, size_t alignment) {
 inline void AlignedFree(void* ptr) {
 #if V8_OS_WIN
   _aligned_free(ptr);
-#elif V8_OS_STARBOARD
-  SbMemoryFreeAligned(ptr);
 #else
   // Using regular Free() is not correct in general. For most platforms,
   // including V8_LIBC_BIONIC, it is though.
@@ -126,8 +122,8 @@ inline size_t MallocUsableSize(void* ptr) {
 // Mimics C++23 `allocation_result`.
 template <class Pointer>
 struct AllocationResult {
-  Pointer ptr;
-  size_t count;
+  Pointer ptr = nullptr;
+  size_t count = 0;
 };
 
 // Allocates at least `n * sizeof(T)` uninitialized storage but may allocate

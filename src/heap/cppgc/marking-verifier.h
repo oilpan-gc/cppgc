@@ -25,7 +25,7 @@ class VerificationState {
   // No parent means parent was on stack.
   bool IsParentOnStack() const { return !parent_; }
 
- private:
+ protected:
   const HeapObjectHeader* parent_ = nullptr;
 };
 
@@ -41,7 +41,7 @@ class V8_EXPORT_PRIVATE MarkingVerifierBase
   MarkingVerifierBase(const MarkingVerifierBase&) = delete;
   MarkingVerifierBase& operator=(const MarkingVerifierBase&) = delete;
 
-  void Run(StackState, uintptr_t, v8::base::Optional<size_t>);
+  void Run(StackState, v8::base::Optional<size_t>);
 
  protected:
   MarkingVerifierBase(HeapBase&, CollectionType, VerificationState&,
