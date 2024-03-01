@@ -23,9 +23,11 @@ class MarkingVerifierTest : public testing::TestWithHeap {
   V8_NOINLINE void VerifyMarking(HeapBase& heap, StackState stack_state,
                                  size_t expected_marked_bytes) {
     Heap::From(GetHeap())->object_allocator().ResetLinearAllocationBuffers();
-    MarkingVerifier verifier(heap, CollectionType::kMajor);
-    verifier.Run(stack_state, v8::base::Stack::GetCurrentStackPosition(),
-                 expected_marked_bytes);
+    Heap::From(GetHeap())->stack()->SetMarkerAndCallback(
+        [&heap, stack_state, expected_marked_bytes]() {
+          MarkingVerifier verifier(heap, CollectionType::kMajor);
+          verifier.Run(stack_state, expected_marked_bytes);
+        });
   }
 };
 

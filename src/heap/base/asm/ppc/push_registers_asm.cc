@@ -18,10 +18,13 @@
 // https://www.ibm.com/support/knowledgecenter/ssw_aix_71/assembler/idalangref_runtime_process.html
 asm(
 #if defined(_AIX)
-    ".globl .PushAllRegistersAndIterateStack, hidden    \n"
     ".csect .text[PR]                                   \n"
+    ".align 2                                           \n"
+    ".globl .PushAllRegistersAndIterateStack, hidden    \n"
     ".PushAllRegistersAndIterateStack:                  \n"
 #else
+    ".text                                              \n"
+    ".align 2                                           \n"
     ".globl PushAllRegistersAndIterateStack             \n"
     ".type PushAllRegistersAndIterateStack, %function   \n"
     ".hidden PushAllRegistersAndIterateStack            \n"
